@@ -5,6 +5,7 @@
 (define-constant err-not-authorized (err u100))
 (define-constant err-channel-exists (err u101))
 (define-constant err-invalid-channel (err u102))
+(define-constant err-channel-closed (err u103))
 
 ;; Data vars
 (define-map channels 
@@ -48,11 +49,25 @@
         (var-set next-channel-id (+ channel-id u1))
         (ok channel-id)))))
 
+(define-public (close-channel (channel-id uint))
+  (let ((channel (map-get? channels {channel-id: channel-id})))
+    (if (and
+          (is-some channel)
+          (is-eq tx-sender (get owner (unwrap-panic channel))))
+      (begin
+        (map-set channels
+          {channel-id: channel-id}
+          (merge (unwrap-panic channel) {status: "closed"})
+        )
+        (ok true))
+      err-not-authorized)))
+
 (define-public (post-update (channel-id uint) (data-hash (buff 32)) (merkle-root (buff 32)))
   (let ((channel (map-get? channels {channel-id: channel-id}))
         (update-id (var-get next-update-id)))
     (if (and
           (is-some channel)
+          (is-eq (get status (unwrap-panic channel)) "active")
           (or
             (is-eq tx-sender (get owner (unwrap-panic channel)))
             (is-eq tx-sender (get participant (unwrap-panic channel)))
